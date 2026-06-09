@@ -103,16 +103,36 @@ def draw_text(text, font, color, x, y, shadow=True):
     rect.center = (x, y)
     screen.blit(surface, rect)
 
-def draw_block(screen, color, x, y, size, is_head=False):
-    rect = pygame.Rect(x, y, size, size)
-    pygame.draw.rect(screen, color, rect)
-    pygame.draw.rect(screen, BLACK, rect, 1)
+def draw_cube(screen, base_color, x, y, size, is_head=False):
+    # Simple isometric cube rendering
+    h = size // 2
+    # Top face points
+    top = [(x + h, y - h), (x + size + h, y - h), (x + size, y), (x, y)]
+    # Left face points
+    left = [(x, y), (x + h, y - h), (x + h, y + size - h), (x, y + size)]
+    # Right face points
+    right = [(x + size, y), (x + size + h, y - h), (x + size + h, y + size - h), (x + size, y + size)]
+    # Shade colors
+    shade = lambda c, f: tuple(min(255, int(v * f)) for v in c)
+    top_color = shade(base_color, 1.2)
+    left_color = shade(base_color, 0.8)
+    right_color = shade(base_color, 1.0)
+    # Draw faces
+    pygame.draw.polygon(screen, top_color, top)
+    pygame.draw.polygon(screen, left_color, left)
+    pygame.draw.polygon(screen, right_color, right)
+    # Outline
+    pygame.draw.polygon(screen, BLACK, top, 1)
+    pygame.draw.polygon(screen, BLACK, left, 1)
+    pygame.draw.polygon(screen, BLACK, right, 1)
+    # Head eyes (optional)
     if is_head:
-        eye_color = WHITE
-        eye_pupil = BLACK
-        eye_offset = 5
-        eye_size = 4
-        pupil_size = 2
+        eye_offset = size // 5
+        eye_radius = size // 8
+        ex = x + size + h - eye_offset
+        ey = y + size // 2 - eye_offset
+        pygame.draw.circle(screen, WHITE, (ex, ey), eye_radius)
+        pygame.draw.circle(screen, BLACK, (ex, ey), eye_radius // 2)
 
 # Transparent Grid
 grid_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -230,38 +250,19 @@ while running:
     screen.fill(BG_COLOR)
     screen.blit(grid_surface, (0,0))
     
+    # Build render queue (food, obstacles, snake)
     render_queue = []
-    
-    # Food
-    render_queue.append({'type': 'food', 'x': food[0], 'y': food[1], 'color': RED, 'is_head': False})
-    
-    # Obstacles
+    render_queue.append({'type': 'food', 'x': food[0], 'y': food[1], 'color': RED})
     for obs in obstacles:
-        render_queue.append({'type': 'obstacle', 'x': obs[0], 'y': obs[1], 'color': WALL_COLOR, 'is_head': False})
-    
-    # Snake
+        render_queue.append({'type': 'obstacle', 'x': obs[0], 'y': obs[1], 'color': WALL_COLOR})
     for i, segment in enumerate(snake):
-        is_h = (i == 0)
-        col = GREEN if is_h else DARK_GREEN
-        render_queue.append({'type': 'snake', 'x': segment[0], 'y': segment[1], 'color': col, 'is_head': is_h})
+        is_head = (i == 0)
+        col = GREEN if is_head else DARK_GREEN
+        render_queue.append({'type': 'snake', 'x': segment[0], 'y': segment[1], 'color': col})
     
-    # Simple rendering (no 3D sorting or shadows)
+    # Simple draw pass (2D blocks)
     for item in render_queue:
-        draw_block(screen, item['color'], item['x'], item['y'], BLOCK_SIZE, item['is_head'])
-    
-    # --- Main Draw Pass ---
-    for item in render_queue:
-        draw_block(screen, item['color'], item['x'], item['y'], BLOCK_SIZE, item['is_head'])
-        
-        # Add special glowing light effect to food
-        if item['type'] == 'food':
-            # Glow aura
-            glow = pygame.Surface((BLOCK_SIZE*4, BLOCK_SIZE*4), pygame.SRCALPHA)
-            pygame.draw.circle(glow, (255, 50, 50, 40), (BLOCK_SIZE*2, BLOCK_SIZE*2), BLOCK_SIZE*2)
-            pygame.draw.circle(glow, (255, 100, 100, 80), (BLOCK_SIZE*2, BLOCK_SIZE*2), BLOCK_SIZE)
-            screen.blit(glow, (item['x'] - BLOCK_SIZE*1.5, item['y'] - BLOCK_SIZE*1.5))
-            
-            pygame.draw.rect(screen, WHITE, (item['x']+4, item['y']+4, 6, 6), border_radius=2)
+        pygame.draw.rect(screen, item['color'], (item['x'], item['y'], BLOCK_SIZE, BLOCK_SIZE))
 
     # Draw Score UI
     score_text = f"Mode: {current_mode}   Score: {score}   High Score: {highscore}   Level: {level}"
@@ -278,3 +279,9 @@ while running:
 
 pygame.quit()
 sys.exit()
+
+
+
+
+
+
