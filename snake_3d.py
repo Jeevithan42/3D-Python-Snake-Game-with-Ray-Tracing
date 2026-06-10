@@ -26,11 +26,18 @@ GREY = (0.5, 0.5, 0.5, 0.5)
 class Snake3D(ShowBase):
     def __init__(self):
         super().__init__()
+        print("Snake3D initialized – window opened")
         self.disableMouse()  # we'll control camera manually
         self.camera.setPos(GRID_W/2, -30, GRID_H/2)
         self.camera.lookAt(GRID_W/2, 0, GRID_H/2)
+        self.accept('escape', sys.exit)  # allow quick exit
         self.setup_lights()
-        # simplepbr.init()  # skipped – default lighting used
+        # Ray tracing (RTX) support requires the RenderPipeline addon. Install with:
+# pip install panda3d-renderpipeline
+# Then enable with the following (uncomment after installation):
+# from panda3d.core import loadPrcFileData
+# loadPrcFileData('', 'load-display pipgui')  # example to use pip GUI for pipeline
+# base.enableRenderPipeline()
 
         # Game state
         self.snake = [(GRID_W//2, GRID_H//2)]   # list of (x, y) grid cells
@@ -47,6 +54,21 @@ class Snake3D(ShowBase):
         self.food_node = self.render.attachNewNode('food')
         self.ui = {}
         self.create_ui()
+        # Preload models for reuse (avoid loading each frame)
+        # Set a visible background color for debugging
+        self.setBackgroundColor(0.2, 0.2, 0.4)
+
+        # Load prototypes safely – fallback to simple cube if missing
+        try:
+            self._cube_proto = self.loader.loadModel('models/misc/rgbCube')
+        except Exception as e:
+            print('Failed to load rgbCube model:', e)
+            self._cube_proto = self.loader.loadModel('models/box')  # fallback generic cube
+        try:
+            self._sphere_proto = self.loader.loadModel('models/misc/sphere')
+        except Exception as e:
+            print('Failed to load sphere model:', e)
+            self._sphere_proto = self.loader.loadModel('models/sphere')  # fallback generic sphere
         self.build_scene()
 
         # Input handling
@@ -61,6 +83,7 @@ class Snake3D(ShowBase):
 
         # Game loop task
         self.taskMgr.add(self.update, "gameLoop")
+
 
     def setup_lights(self):
         # Simple directional light to simulate a sun
@@ -88,19 +111,17 @@ class Snake3D(ShowBase):
         # Clear previous geometry
         self.snake_node.node().removeAllChildren()
         self.food_node.node().removeAllChildren()
-        # Build snake cubes
+        # Build snake cubes using preloaded prototype
         for i, (x, y) in enumerate(self.snake):
-            cube = self.loader.loadModel('models/box')
-            cube.reparentTo(self.snake_node)
+            cube = self._cube_proto.copyTo(self.snake_node)
             cube.setScale(BLOCK_SIZE/2)
             cube.setPos(x * BLOCK_SIZE + BLOCK_SIZE/2,
                         0,
                         y * BLOCK_SIZE + BLOCK_SIZE/2)
             col = GREEN if i == 0 else DARK_GREEN
             cube.setColor(col)
-        # Food sphere
-        sphere = self.loader.loadModel('models/sphere')
-        sphere.reparentTo(self.food_node)
+        # Food sphere using prototype
+        sphere = self._sphere_proto.copyTo(self.food_node)
         sphere.setScale(BLOCK_SIZE/2)
         fx, fy = self.food
         sphere.setPos(fx * BLOCK_SIZE + BLOCK_SIZE/2, 0, fy * BLOCK_SIZE + BLOCK_SIZE/2)
@@ -123,9 +144,10 @@ class Snake3D(ShowBase):
                 return (x, y)
 
     def update(self, task):
+        
         if self.game_over:
             return Task.done
-        dt = globalClock.getDt()  # globalClock provided by ShowBase
+        dt = ClockObject.getGlobalClock().getDt()  # use ClockObject for delta time
         # Simple frame‑rate independent timer – move the snake every X seconds
         if not hasattr(self, 'move_timer'):
             self.move_timer = 0.0
@@ -172,9 +194,19 @@ class Snake3D(ShowBase):
         self.accept('r', self.restart)
 
     def restart(self):
-        # Ensure UI dict exists – recreate UI if it was somehow cleared
+        # Ensure UI exists (re‑create if missing)
         self.ui = {}
         self.create_ui()
+        # Ensure rendering containers exist (re‑create after a full reset)
+        if not hasattr(self, 'snake_node'):
+            self.snake_node = self.render.attachNewNode('snake')
+        if not hasattr(self, 'food_node'):
+            self.food_node = self.render.attachNewNode('food')
+        # Ensure prototype models are loaded (needed after a restart)
+        if not hasattr(self, '_cube_proto'):
+            self._cube_proto = self.loader.loadModel('models/misc/rgbCube')
+        if not hasattr(self, '_sphere_proto'):
+            self._sphere_proto = self.loader.loadModel('models/misc/sphere')
         self.snake = [(GRID_W//2, GRID_H//2)]
         self.direction = (0,0)
         self.food = self.spawn_food()
